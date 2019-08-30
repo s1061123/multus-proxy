@@ -1,0 +1,10 @@
+# Binary output dir
+bin/
+daemon
+
+# GOPATH created by the build script
+gopath/
+
+# Test outputs
+*.out
+*.test

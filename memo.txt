@@ -1,0 +1,54 @@
+generate-groups.sh all github.com/s1061123/multus-proxy/pkg/client github.com/s1061123/multus-proxy/pkg/apis "netattach:v1alpha"
+
+proto?
+ ./pkg/apis/service/v1/api.proto
+ ./pkg/apis/endpoint/v1/api.proto
+ ./pkg/apis/.../v1/api.proto 
+==================
+
+Algorithem
+
+Render iptables
+
+render_out:
+  iptable rules per net-attach-def
+  net-attach-defs in pods
+
+
+for s in all_services {
+  if no endpoint {
+    + -A MULTUS-SERVICES -d <VIP> -p tcp -m comment --comment "<namespace>/<service name>: has no endpoints" -m <proto> --dport <port> -j REJECT --reject-with icmp-port-unreachable
+  }
+
+  for e in all_endpoints {
+    + -A MULTUS-SEP-<endpoint ID> -p tcp -m tcp -j DNAT --to-destination <endpoint ip>:<endpoint port>
+    if not last one {
+      + -A MULTUS-SVC-<service ID> -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-<endpoint id>
+      #Note: probability needs to calculate (1 div endpoints)
+    }
+    + -A MULTUS-SVC-<service ID> -j KUBE-SEP-<last one endpoint id>
+  }
+
+#  + -A KUBE-SERVICES ! -s <cluster CIDR> -d <service ip/cidr,32> -p tcp -m comment --comment "<namespace>/<service name>: cluster IP" -m <proto> --dport <port> -j KUBE-MARK-MASQ
+  + -A KUBE-SERVICES -d <service ip/cidr 32> -p tcp -m comment --comment "<namespace>/<service name>: cluster IP" -m <proto> --dport <port> -j KUBE-SVC-<service ID>
+
+  put iptable rules in net-attach-def render_out
+}
+
+for p in all_pods {
+  -A FORWARD -m conntrack --ctstate NEW -m comment --comment "kubernetes service portals" -j KUBE-SERVICES
+  -A OUTPUT -m conntrack --ctstate NEW -m comment --comment "kubernetes service portals" -j KUBE-SERVICES
+  for n in net-attach-def {
+  }
+}  
+
+====================
+Q: what kube-proxy assign ID?
+
+#In pkg/proxy/iptables/proxier.go
+func portProtoHash(servicePortName string, protocol string) string {
+    hash := sha256.Sum256([]byte(servicePortName + protocol))
+    encoded := base32.StdEncoding.EncodeToString(hash[:])
+    return encoded[:16]
+}
+
